@@ -214,11 +214,17 @@ class Image:
 
 
 	def erode(self, kernel, iterations=1):
+		"""
+		Morphology erosion
+		"""
 		self.image = cv2.erode(self.image, kernel, iterations=iterations)
 		return self
 
 
 	def dilate(self, kernel, iterations=1):
+		"""
+		Morphology dilation
+		"""
 		self.image = cv2.dilate(self.image, kernel, iterations=iterations)
 		return self
 
@@ -329,18 +335,27 @@ class Image:
 
 
 	def thresh_sauvola(self, win_size=15, k=0.2, r=None):
+		"""
+		Sauvola local thresholding
+		"""
 		self.to_gray()
 		mask = skimage.filters.threshold_sauvola(self.image, window_size=win_size, k=k, r=r)
 		self.image = 255 * np.uint8(self.image > mask)
 		return self
 
 	def thresh_niblack(self, win_size=15, k=0.2):
+		"""
+		Niblack local thresholding
+		"""
 		self.to_gray()
 		mask = skimage.filters.threshold_niblack(self.image, window_size=win_size, k=k)
 		self.image = 255 * np.uint8(self.image > mask)
 		return self
 
 	def thresh_li(self):
+		"""
+		Li global thresholding
+		"""
 		self.to_gray()
 		mask = skimage.filters.threshold_li(self.image)
 		self.image = 255 * np.uint8(self.image > mask)
@@ -348,6 +363,11 @@ class Image:
 
 
 	def thresh_bradley(self, S_k=8, T=15.0):
+		# TODO: Make faster
+		"""
+		Bradley local thresholding
+		SUPER SLOW!!!
+		"""
 		self.to_gray()
 		img = self.image
 		h, w = self.shape[:2]
@@ -376,7 +396,10 @@ class Image:
 		return self
 
 
-	def skeletonize_median(self):
+	def skeletonize_medial(self):
+		"""
+		Skeletonization using medial axis
+		"""
 		self.to_gray()
 		skel, distance = skimage.morphology.medial_axis(self.image, return_distance=True)
 		self.image = np.uint8(distance * skel)
@@ -384,6 +407,9 @@ class Image:
 
 
 	def skeletonize(self):
+		"""
+		Classic skeletonization
+		"""
 		self.to_gray()
 		self.image = 255 * np.uint8(skimage.morphology.skeletonize(self.image/255.))
 		return self
@@ -441,6 +467,19 @@ class Image:
 
 
 	def polygon(self, points, color=RED, thickness=1, is_closed=True):
+		""" 
+		Draw a polygon
+
+		Parameters: 
+			points (list)    : List of polygon points
+			color (tuple)    : Fill/Stroke color
+			thickness (int)  : Stroke thickness (will fill the poly if < 0)
+			is_closed (bool) : Close the poly or not
+
+		Returns: 
+			self: Image
+
+		"""
 		if type(points) == list or type(points) == tuple:
 			points = np.array([points], dtype=np.int32)
 		if thickness < 0:
@@ -451,17 +490,57 @@ class Image:
 
 
 	def line(self, a, b, color=RED, thickness=1, mode=cv2.LINE_AA):
+		""" 
+		Draw a line
+
+		Parameters: 
+			a (tuple)       : Start point
+			b (tuple)       : End point
+			thickness (int) : Stroke thickness
+			color (tuple)   : Fill/Stroke color
+			mode (int)      : Line type
+
+		Returns: 
+			self: Image
+
+		"""
 		self.image = cv2.line(self.image, tuple(a), tuple(b), color, thickness, mode)
 		return self
 
 
-	def ellipse(self, center, width, height, color=RED, thickness=1, angle=0, start_angle=0, end_angle=360):
-		self.image = cv2.ellipse(self.image, center, (width, height), angle, start_angle, end_angle, color=color,
-								 thickness=thickness)
+	def ellipse(self, center, width, height, color=RED, thickness=1):
+		""" 
+		Draw an ellipse
+
+		Parameters: 
+			center (tuple)  : Ellipse center
+			width (int)     : Ellipse width
+			height (int)    : Ellipse height
+			thickness (int) : Stroke thickness (will fill if < 0)
+			color (tuple)   : Fill/Stroke color
+
+		Returns: 
+			self: Image
+
+		"""
+		self.image = cv2.ellipse(self.image, center, (width, height), 0, 0, 360, color=color, thickness=thickness)
 		return self
 
 
 	def circle(self, center, radius, color=RED, thickness=1):
+		""" 
+		Draw a circle
+
+		Parameters: 
+			center (tuple)  : Circle center
+			radius (int)    : Circle radius
+			thickness (int) : Stroke thickness (will fill if < 0)
+			color (tuple)   : Fill/Stroke color
+
+		Returns: 
+			self: Image
+
+		"""
 		self.image = cv2.circle(self.image, center, radius, color, thickness=thickness)
 		return self
 
