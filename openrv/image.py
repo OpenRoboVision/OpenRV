@@ -2,8 +2,8 @@ import numpy as np
 import cv2
 import imutils
 import cv2.aruco as aruco
-from colors import *
-from contour import Contour, Contours
+from openrv.colors import *
+from openrv.contour import Contour, Contours
 import skimage.filters
 import skimage.morphology
 from scipy import ndimage as ndi

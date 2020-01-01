@@ -1,6 +1,6 @@
 import cv2
 import time
-from image import Image
+from openrv.image import Image
 
 
 class CaptureException(Exception):

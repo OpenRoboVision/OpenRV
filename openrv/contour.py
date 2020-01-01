@@ -1,6 +1,6 @@
 import cv2
 import numpy as np
-import utils
+import openrv.utils
 
 
 class Contour:
