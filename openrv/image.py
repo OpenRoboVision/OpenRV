@@ -25,15 +25,47 @@ class Image:
 
 
 	def show(self, name='Frame'):
+		""" 
+		Show self.image
+
+		Will draw this image on the window. Will create it if doesn't exists
+
+		Parameters: 
+			name : Name of the window to draw on
+
+		Returns: 
+			Image: self 
+
+		"""
 		cv2.imshow(name, self.image)
+		return self
 
 
 	def resize(self, width=None, height=None, inter=cv2.INTER_CUBIC):
+		""" 
+		Resize self.image with given params
+
+		Parameters: 
+			width  : Target width
+			height : Target height
+			inter  : interpolation type
+
+		Returns: 
+			self: Image
+
+		"""
 		self.image = imutils.resize(self.image, width=width, height=height, inter=inter)
 		return self
 
 
 	def gray(self):
+		""" 
+		Creates a grayscale copy of the image
+
+		Returns: 
+			Image: GRAYSCALE copy
+
+		"""
 		if self.color_scheme == GRAY:
 			return self
 		res = Image.from_arr(cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY))
@@ -42,12 +74,26 @@ class Image:
 
 
 	def to_gray(self):
+		""" 
+		Convert this image to GRAYSCALE
+
+		Returns: 
+			Image: self
+
+		"""
 		inp = self.gray()
 		self.image = inp.img
 		self.color_scheme = inp.color_scheme
 
 
 	def bgr(self):
+		""" 
+		Creates a BGR copy of the image
+
+		Returns: 
+			Image: BGR copy
+
+		"""
 		if self.color_scheme == BGR:
 			return self
 		key = cv2.COLOR_GRAY2BGR
@@ -59,12 +105,26 @@ class Image:
 
 
 	def to_bgr(self):
+		""" 
+		Convert this image to BGR
+
+		Returns: 
+			Image: self
+
+		"""
 		inp = self.bgr()
 		self.image = inp.img
 		self.color_scheme = inp.color_scheme
 
 
 	def hsv(self):
+		""" 
+		Creates a HSV copy of the image
+
+		Returns: 
+			Image: grayscaled copy
+
+		"""
 		if self.color_scheme == HSV:
 			return self
 		res = Image.from_arr(cv2.cvtColor(self.image, cv2.COLOR_BGR2HSV))
@@ -73,12 +133,30 @@ class Image:
 
 
 	def to_hsv(self):
+		""" 
+		Convert this image to HSV
+
+		Returns: 
+			Image: self
+
+		"""
 		inp = self.hsv()
 		self.image = inp.img
 		self.color_scheme = inp.color_scheme
 
 
 	def rotate(self, angle, bound=False):
+		""" 
+		Rotate self.image on given angle
+
+		Parameters: 
+			angle (int)  : rotatation angle (clockwise)
+			bound (bool) : crop the image or not
+
+		Returns: 
+			self: Image
+
+		"""
 		if bound:
 			self.image = imutils.rotate_bound(self.image, angle)
 		else:
@@ -86,7 +164,17 @@ class Image:
 		return self
 
 
-	def mask(self, mask):
+	def apply_mask(self, mask):
+		""" 
+		Apply the bitwise mask to self.image
+
+		Parameters: 
+			mask (Image) : bitwise mask to apply
+
+		Returns: 
+			self: Image
+
+		"""
 		mask = mask.copy()
 		if self.channels > 2:
 			mask.to_gray()
@@ -94,7 +182,23 @@ class Image:
 		return self
 
 
-	def find_color(self, base_color=None, sensitivity=25, lower=(0, 0, 0), upper=(255, 255, 255), sens_mult=5.0):
+	def find_color(self, base_color=None, sensitivity=25, lower=(0, 0, 0), upper=(255, 255, 255), sens_mult=1.0):
+		""" 
+		Search for the given color on self.image
+
+		self.image will be a bitwise mask of the color
+
+		Parameters: 
+			base_color (tuple) : color to find (if != None)
+			sensitivity (int)  : sensativity for base_color (if base_color != None)
+			sens_mult (float)  : sensativity factor (if base_color != None)
+			lower (tuple)      : lower limit of the color range (if base_color == None)
+			upper (tuple)      : upper limit of the color range (if base_color == None)
+
+		Returns: 
+			self: Image
+
+		"""
 		res = self.copy()
 		if res.color_scheme != HSV:
 			res.to_bgr()
@@ -120,16 +224,40 @@ class Image:
 
 
 	def find_aruco(self, dict_type=aruco.DICT_ARUCO_ORIGINAL):
+		""" 
+		Returns list of corners and ids of found markers
+
+		Parameters: 
+			dict_type (int) : ArUco dictionary type
+
+		Returns: 
+			corners: list[list]
+
+		"""
 		corners, ids, _ = aruco.detectMarkers(self.image, aruco.Dictionary_get(dict_type),
 											  parameters=aruco_params)
 		return corners, ids
 
 
 	def draw_aruco(self, corners, ids):
+		""" 
+		Draw ArUco markers on self.image
+		"""
 		cv2.aruco.drawDetectedMarkers(self.image, corners, ids)
 
 
 	def correct_perspective(self, src, dst):
+		""" 
+		Remove perspective distortion (4 points)
+
+		Parameters: 
+			src (list) : Four points(x,y) on the original image
+			dst (list) : 4 target points after correction
+
+		Returns: 
+			self: Image
+
+		"""
 		img = self.image
 		h, w = img.shape[:2]
 		M = cv2.getPerspectiveTransform(src, dst)
@@ -138,33 +266,62 @@ class Image:
 
 
 	def crop(self, x1, y1, x2, y2):
+		""" 
+		Crop a par of image
+		"""
 		self.image = self.image[y1:y2, x1:x2]
 		return self
 
 
 	def avg_color(self):
+		""" 
+		Get an average color of the image
+		"""
 		if self.color_scheme == GRAY:
 			return np.mean(self.image)
 		elif self.color_scheme == BGR:
-			r, g, b = self.split()
+			r, g, b = self._split()
 			return np.mean(r), np.mean(g), np.mean(b)
 		elif self.color_scheme == HSV:
-			h, s, v = self.copy().hsv().split()
+			h, s, v = self.copy().hsv()._split()
 			return np.mean(h), np.mean(s), np.mean(v)
 
 
-	def split(self):
+	def _split(self):
 		return cv2.split(self.image)
 
 
 	def change_contrast(self, level):
+		""" 
+		Change contarst of the self.image
+
+		Parameters: 
+			level (float) : New contrast (0 - 255)
+
+		Returns: 
+			self: Image
+
+		"""
 		frame = np.int16(self.image)
 		frame = frame * (level / 127 + 1) - level
 		frame = np.clip(frame, 0, 255)
 		self.image = np.uint8(frame)
+		return self
 
 
 	def thresh(self, level, mode=cv2.THRESH_BINARY, max_val=255):
+		""" 
+		Global thresholding
+
+		Parameters: 
+			level (int)   : Threshold level
+			max_val (int) : Value to fill
+			mode (int)    : Threshold mode (cv2.THRESH_BINARY, cv2.THRESH_BINARY_INV, etc.)
+
+		Returns: 
+			self: Image
+
+		"""
 		if self.color_scheme != GRAY:
 			self.to_gray()
 		self.image = cv2.threshold(self.image, level, max_val, mode)[1]
@@ -233,6 +390,9 @@ class Image:
 
 
 	def sobel_2d(self, size=3, ultra_bright=False):
+		"""
+		Two demensional Sobel operator
+		"""
 		self.to_gray()
 		gray = cv2.GaussianBlur(self.image, (size,) * 2, 0)
 		grad_x = cv2.Sobel(gray, cv2.CV_16S, 1, 0, ksize=size, scale=1, delta=0, borderType=cv2.BORDER_DEFAULT)
@@ -245,6 +405,9 @@ class Image:
 
 
 	def sobel(self, x, y, size, scale=1, delta=0, border_type=cv2.BORDER_CONSTANT):
+		"""
+		Sobel operator
+		"""
 		self.to_gray()
 		self.color_scheme = GRAY
 		self.image = cv2.Sobel(self.image, cv2.CV_16S, x, y, ksize=size, scale=scale, delta=delta,
@@ -253,18 +416,27 @@ class Image:
 
 
 	def canny(self, lower, upper):
+		"""
+		Canny edge detector
+		"""
 		self.to_gray()
 		self.image = cv2.Canny(self.img, lower, upper)
 		return self
 
 
 	def get(self, x, y):
+		"""
+		Get pixel color at (x,y)
+		"""
 		if self.color_scheme == HSV:
 			return cv2.cvtColor(np.uint8([[self.image[y, x]]]), cv2.COLOR_BGR2HSV)[0][0]
 		return self.image[y, x]
 
 
 	def size(self):
+		"""
+		Returns width, height of the image
+		"""
 		return self.image.shape[1], self.image.shape[0]
 
 
@@ -412,7 +584,7 @@ class Image:
 		if self.color_scheme == GRAY:
 			self.image = cv2.fastNlMeansDenoising(self.image, None, h, template_size, search_size)
 			return self.copy()
-		b, g, r = self.split()
+		b, g, r = self._split()
 		b = cv2.fastNlMeansDenoising(b, None, h, template_size, search_size)
 		g = cv2.fastNlMeansDenoising(g, None, h, template_size, search_size)
 		r = cv2.fastNlMeansDenoising(r, None, h, template_size, search_size)
