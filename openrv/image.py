@@ -24,7 +24,7 @@ class Image:
 		self.color_scheme = BGR
 
 
-	def show(self, name='Frame'):
+	def show(self, name='Frame', id=None):
 		""" 
 		Show self.image
 
@@ -37,6 +37,8 @@ class Image:
 			Image: self 
 
 		"""
+		if id is not None:
+			name += ' ' + str(id)
 		cv2.imshow(name, self.image)
 		return self
 
@@ -54,7 +56,10 @@ class Image:
 			self: Image
 
 		"""
-		self.image = imutils.resize(self.image, width=width, height=height, inter=inter)
+		if width is None or height is None:
+			self.image = imutils.resize(self.image, width=width, height=height, inter=inter)
+		else:
+			self.image = cv2.resize(self.image, (width, height))
 		return self
 
 
@@ -67,8 +72,9 @@ class Image:
 
 		"""
 		if self.color_scheme == GRAY:
-			return self
-		res = Image.from_arr(cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY))
+			return self.copy()
+		res = self.copy()
+		res.image = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY)
 		res.color_scheme = GRAY
 		return res
 
@@ -81,9 +87,11 @@ class Image:
 			Image: self
 
 		"""
-		inp = self.gray()
-		self.image = inp.img
-		self.color_scheme = inp.color_scheme
+		if self.color_scheme == GRAY:
+			return self
+		self.image = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY)
+		self.color_scheme = GRAY
+		return self
 
 
 	def bgr(self):
@@ -94,13 +102,13 @@ class Image:
 			Image: BGR copy
 
 		"""
-		if self.color_scheme == BGR:
-			return self
-		key = cv2.COLOR_GRAY2BGR
+		res = self.copy()
 		if self.color_scheme == HSV:
-			key = cv2.COLOR_HSV2BGR
-		res = Image.from_arr(cv2.cvtColor(self.image, key))
-		res.color_scheme = BGR
+			res.image = cv2.cvtColor(self.image, cv2.COLOR_HSV2BGR)
+			res.color_scheme = BGR
+		elif self.color_scheme == GRAY:
+			res.image = cv2.cvtColor(self.image, cv2.COLOR_GRAY2BGR)
+			res.color_scheme = BGR
 		return res
 
 
@@ -112,9 +120,13 @@ class Image:
 			Image: self
 
 		"""
-		inp = self.bgr()
-		self.image = inp.img
-		self.color_scheme = inp.color_scheme
+		if self.color_scheme == HSV:
+			self.image = cv2.cvtColor(self.image, cv2.COLOR_HSV2BGR)
+			self.color_scheme = BGR
+		elif self.color_scheme == GRAY:
+			self.image = cv2.cvtColor(self.image, cv2.COLOR_GRAY2BGR)
+			self.color_scheme = BGR
+		return self
 
 
 	def hsv(self):
@@ -125,10 +137,13 @@ class Image:
 			Image: grayscaled copy
 
 		"""
-		if self.color_scheme == HSV:
-			return self
-		res = Image.from_arr(cv2.cvtColor(self.image, cv2.COLOR_BGR2HSV))
-		res.color_scheme = HSV
+		res = self.copy()
+		if self.color_scheme == BGR:
+			res.image = cv2.cvtColor(self.image, cv2.COLOR_BGR2HSV)
+			res.color_scheme = HSV
+		elif self.color_scheme == GRAY:
+			res.image = cv2.cvtColor(cv2.cvtColor(self.image, cv2.COLOR_GRAY2BGR), cv2.COLOR_BGR2HSV)
+			res.color_scheme = HSV
 		return res
 
 
@@ -140,9 +155,13 @@ class Image:
 			Image: self
 
 		"""
-		inp = self.hsv()
-		self.image = inp.img
-		self.color_scheme = inp.color_scheme
+		if self.color_scheme == BGR:
+			self.image = cv2.cvtColor(self.image, cv2.COLOR_BGR2HSV)
+			self.color_scheme = HSV
+		elif self.color_scheme == GRAY:
+			self.image = cv2.cvtColor(cv2.cvtColor(self.image, cv2.COLOR_GRAY2BGR), cv2.COLOR_BGR2HSV)
+			self.color_scheme = HSV
+		return self
 
 
 	def rotate(self, angle, bound=False):
@@ -150,7 +169,7 @@ class Image:
 		Rotate self.image on given angle
 
 		Parameters: 
-			angle (int)  : rotatation angle (clockwise)
+			angle (int)  : rotatation angle (CCW)
 			bound (bool) : crop the image or not
 
 		Returns: 
@@ -161,6 +180,14 @@ class Image:
 			self.image = imutils.rotate_bound(self.image, angle)
 		else:
 			self.image = imutils.rotate(self.image, -angle)
+		return self
+
+
+	def crop(self, x1, y1, x2, y2):
+		""" 
+		Crop a part of self.image
+		"""
+		self.image = self.image[int(y1):int(y2), int(x1):int(x2)]
 		return self
 
 
@@ -175,10 +202,8 @@ class Image:
 			self: Image
 
 		"""
-		mask = mask.copy()
-		if self.channels > 2:
-			mask.to_gray()
-		self.image = cv2.bitwise_and(self.image, self.image, mask=mask)
+		mask = mask.copy().gray()
+		self.image = cv2.bitwise_and(self.image, self.image, mask=mask.image)
 		return self
 
 
@@ -201,7 +226,7 @@ class Image:
 		"""
 		res = self.copy()
 		if res.color_scheme != HSV:
-			res.to_bgr()
+			res.to_hsv()
 
 		if base_color is not None:
 			lower = [base_color[0] - sensitivity, base_color[1] - (sens_mult * sensitivity),
@@ -210,22 +235,6 @@ class Image:
 					 base_color[2] + (sens_mult * sensitivity)]
 
 		self.image = cv2.inRange(res.img, np.array(lower), np.array(upper))
-		return self
-
-
-	def erode(self, kernel, iterations=1):
-		"""
-		Morphology erosion
-		"""
-		self.image = cv2.erode(self.image, kernel, iterations=iterations)
-		return self
-
-
-	def dilate(self, kernel, iterations=1):
-		"""
-		Morphology dilation
-		"""
-		self.image = cv2.dilate(self.image, kernel, iterations=iterations)
 		return self
 
 
@@ -250,7 +259,7 @@ class Image:
 		Draw ArUco markers on self.image
 		"""
 		cv2.aruco.drawDetectedMarkers(self.image, corners, ids)
-
+		return self
 
 	def correct_perspective(self, src, dst):
 		""" 
@@ -266,16 +275,8 @@ class Image:
 		"""
 		img = self.image
 		h, w = img.shape[:2]
-		M = cv2.getPerspectiveTransform(src, dst)
+		M = cv2.getPerspectiveTransform(np.float32(src), np.float32(dst))
 		self.image = cv2.warpPerspective(img, M, (w, h), flags=cv2.INTER_LINEAR)
-		return self
-
-
-	def crop(self, x1, y1, x2, y2):
-		""" 
-		Crop a par of image
-		"""
-		self.image = self.image[y1:y2, x1:x2]
 		return self
 
 
@@ -286,11 +287,11 @@ class Image:
 		if self.color_scheme == GRAY:
 			return np.mean(self.image)
 		elif self.color_scheme == BGR:
-			r, g, b = self._split()
-			return np.mean(r), np.mean(g), np.mean(b)
+			b, g, r = self._split()
+			return int(np.mean(b)), int(np.mean(g)), int(np.mean(r))
 		elif self.color_scheme == HSV:
 			h, s, v = self.copy().hsv()._split()
-			return np.mean(h), np.mean(s), np.mean(v)
+			return int(np.mean(h)), int(np.mean(s)), int(np.mean(v))
 
 
 	def _split(self):
@@ -396,6 +397,37 @@ class Image:
 		return self
 
 
+	def adaptive_box_thresh(self, winSize, ratio=0.):
+		self.to_gray()
+		img_smooth = cv2.boxFilter(self.image, cv2.CV_32FC1, winSize)
+		out = self.image - (1.0-ratio) * img_smooth
+		out[out>=0] = 255
+		out[out<0] = 0
+		self.image = np.uint8(out)
+		return self
+
+
+	def adaptive_thresh(self, block_size, C, max_val=255, method=cv2.ADAPTIVE_THRESH_GAUSSIAN_C, thresh_type=cv2.THRESH_BINARY):
+		if self.color_scheme != GRAY:
+			self.to_gray()
+		self.image = cv2.adaptiveThreshold(self.image, max_val, method, thresh_type, block_size, C)
+		return self
+
+
+	def _split_blocks(self, a, b, force=False):
+		arr = self.image.copy()
+		if any([s % a != 0 for s in self.image.shape[:2]]) or any([s % b != 0 for s in self.image.shape[:2]]):
+			if not force:
+				raise ValueError(f'Unable to split image with shape {self.image.shape[:2][::-1]} into non-overlapping {a}x{b} blocks')
+			else:
+				arr = arr[:b * (self.size()[1]//b), :a * (self.size()[0]//a)]
+		vert_split = np.array_split(arr, arr.shape[0]//b)
+		split = np.array([np.uint8(np.hsplit(splice, arr.shape[1]//a)) for splice in vert_split])
+		return split
+		# return np.uint8(np.array([np.hsplit(a, arr.shape[1]//a) for a in ]))
+
+
+
 	def skeletonize_medial(self):
 		"""
 		Skeletonization using medial axis
@@ -425,7 +457,7 @@ class Image:
 		grad_y = cv2.Sobel(gray, cv2.CV_16S, 0, 1, ksize=size, scale=1, delta=0, borderType=cv2.BORDER_DEFAULT)
 		abs_grad_x = cv2.convertScaleAbs(grad_x)
 		abs_grad_y = cv2.convertScaleAbs(grad_y)
-		alpha = 1.5 if ultra_bright else 0.5
+		alpha = 2. if ultra_bright else 1.
 		self.image = cv2.addWeighted(abs_grad_x, alpha, abs_grad_y, alpha, 0)
 		return self
 
@@ -578,6 +610,11 @@ class Image:
 		return self
 
 
+	def blur(self, ksize):
+		self.image = cv2.blur(self.image, ksize)
+		return self
+
+
 	def gaussian(self, size, sigma_x, sigma_y=0):
 		self.image = cv2.GaussianBlur(self.image, size, sigma_x, sigmaY=sigma_y)
 		return self
@@ -592,40 +629,79 @@ class Image:
 		self.image = cv2.bilateralFilter(self.image, d, sigma_color, sigma_space)
 		return self
 
+	def box_filter(self, winSize):
+		self.image = cv2.boxFilter(self.image, cv2.CV_32FC1, winSize)
+		return self
 
 	def filter(self, depth, kernel):
 		self.image = cv2.filter2D(self.image, depth, kernel)
 		return self
 
 
-	def overlay(self, other, alpha=0.5):
-		other = other.copy().resize(width=other.size()[0], height=other.size()[1])
-		self.image = cv2.addWeighted(self.image, 1, other.image, alpha, 0)
+	def overlay(self, other, alpha=0.5, pos=(0,0), fill=False):
+		other = other.copy()
+		if fill:
+			other = other.resize(width=other.size()[0], height=other.size()[1])
+			pos = (0,0)
+
+		overlay = self.copy().put(other, pos[0], pos[1])
+		self.image = cv2.addWeighted(self.image, 1, overlay.image, alpha, 0)
+		return self
+
+
+	def erode(self, kernel, iterations=1):
+		"""
+		Morphology erosion
+		"""
+		if type(kernel) in [tuple, list]:
+			kernel = np.ones(tuple(kernel))
+		self.image = cv2.erode(self.image, kernel, iterations=iterations)
+		return self
+
+
+	def dilate(self, kernel, iterations=1):
+		"""
+		Morphology dilation
+		"""
+		if type(kernel) in [tuple, list]:
+			kernel = np.ones(tuple(kernel))
+		self.image = cv2.dilate(self.image, kernel, iterations=iterations)
 		return self
 
 
 	def morph_gradient(self, kernel):
+		if type(kernel) in [tuple, list]:
+			kernel = np.ones(tuple(kernel))
 		self.image = cv2.morphologyEx(self.image, cv2.MORPH_GRADIENT, kernel)
 		return self
 
 	def morph_close(self, kernel):
+		if type(kernel) in [tuple, list]:
+			kernel = np.ones(tuple(kernel))
 		self.image = cv2.morphologyEx(self.image, cv2.MORPH_CLOSE, kernel)
 		return self
 
 	def morph_open(self, kernel):
+		if type(kernel) in [tuple, list]:
+			kernel = np.ones(tuple(kernel))
 		self.image = cv2.morphologyEx(self.image, cv2.MORPH_OPEN, kernel)
 		return self
 
 	def morph_tophat(self, kernel):
+		if type(kernel) in [tuple, list]:
+			kernel = np.ones(tuple(kernel))
 		self.image = cv2.morphologyEx(self.image, cv2.MORPH_TOPHAT, kernel)
 		return self.copy()
 
 	def morph_blackhat(self, kernel):
+		if type(kernel) in [tuple, list]:
+			kernel = np.ones(tuple(kernel))
 		self.image = cv2.morphologyEx(self.image, cv2.MORPH_BLACKHAT, kernel)
 		return self
 
 	def put(self, another, x, y):
-		background, overlay = self.image, another.image
+		another = another.bgr()
+		background, overlay = self.bgr().image, another.image
 		background_width = background.shape[1]
 		background_height = background.shape[0]
 
@@ -642,7 +718,7 @@ class Image:
 			h = background_height - y
 			overlay = overlay[:h]
 
-		if overlay.shape[2] < 4:
+		if another.channels < 4:
 			overlay = np.concatenate(
 				[
 					overlay,
@@ -683,22 +759,17 @@ class Image:
 		return self
 
 
-	def adaptive_thresh(self, block_size, C, max_val=255, adaptive_method=cv2.ADAPTIVE_THRESH_GAUSSIAN_C, thresh_type=cv2.THRESH_BINARY):
-		if self.color_scheme != GRAY:
-			self.to_gray()
-		self.image = cv2.adaptiveThreshold(self.image, max_val, adaptive_method, thresh_type, block_size, C)
-		return self
-
-
 	def get_quarter(self, x, y):
 		w, h = self.size()
-		if x > w and y > h:
+		w //= 2
+		h //= 2
+		if x > w and y < h:
 			return 1
-		elif x < w and y > h:
-			return 2
 		elif x < w and y < h:
+			return 2
+		elif x < w and y > h:
 			return 3
-		elif x > w and y < h:
+		elif x > w and y > h:
 			return 4
 		return 0
 
@@ -711,7 +782,7 @@ class Image:
 		for i in range(1, w):
 			for j in range(1, h):
 				pix = self.get(i, j)
-				dx = abs(int(pix) - int(self.get(i-1, j)))
+				dx = abs(int(pix) - int(self.get(i-kx, j-ky)))
 				buff[j,i] = dx
 		self.image = np.uint8(buff)
 		return self
@@ -729,10 +800,10 @@ class Image:
 		return self
 
 
-	def DoG(self, alpha=6.6, betta=1.5):
+	def DoG(self, alpha=6.6, betta=1.5, size=(0,0)):
 		self.to_gray()
-		g1 = cv2.GaussianBlur(self.image, (0,0), alpha)
-		g2 = cv2.GaussianBlur(self.image, (0,0), betta)
+		g1 = cv2.GaussianBlur(self.image, size, alpha)
+		g2 = cv2.GaussianBlur(self.image, size, betta)
 		self.image = g1 - g2
 		return self
 
@@ -755,8 +826,8 @@ class Image:
 		return self
 
 	def inpaint(self, mask, radius, mode=cv2.INPAINT_TELEA):
-		self.to_gray()
-		self.image = cv2.inpaint(self.image, mask, radius, mode)
+		self.to_bgr()
+		self.image = cv2.inpaint(self.image, mask.image, radius, mode)
 		return self
 
 	def dist_transform(self, size, mode=cv2.DIST_L2):
@@ -769,7 +840,9 @@ class Image:
 
 	@property
 	def channels(self):
-		return self.image.shape[2] or 1
+		if len(self.image.shape) >= 3:
+			return self.image.shape[2]
+		return 1
 
 	@property
 	def shape(self):
@@ -778,6 +851,18 @@ class Image:
 	@property
 	def img(self):
 		return self.image
+
+	@property
+	def width(self):
+		return self.image.shape[1]
+
+	@property
+	def height(self):
+		return self.image.shape[0]
+
+	@property
+	def dtype(self):
+		return self.image.dtype
 
 	@staticmethod
 	def from_arr(arr, scheme=BGR):
@@ -808,25 +893,33 @@ class Image:
 				cv2.resize(im.image, (int(im.shape[1] * h_min / im.shape[0]), h_min), interpolation=interpolation)
 				for im in images]
 			result = cv2.hconcat(im_list_resize)
-		return Image.from_arr(result)
+		output = Image.from_arr(result)
+		output.color_scheme = images[0].color_scheme
+		return output
 
 	@staticmethod
 	def filled_mask(width, height):
-		return Image.from_arr(255 * np.ones((height, width), dtype=np.uint8))
+		res = Image.from_arr(255 * np.ones((height, width), dtype=np.uint8))
+		res.color_scheme = GRAY
+		return res
 
 	@staticmethod
 	def filled_mask_like(target):
-		return Image.from_arr(255 * np.ones((target.img.shape[0], target.img.shape[1]), dtype=np.uint8))
+		res = Image.from_arr(255 * np.ones((target.img.shape[0], target.img.shape[1]), dtype=np.uint8))
+		res.color_scheme = GRAY
+		return res
 
 	@staticmethod
 	def blank_mask(width, height):
-		return Image.from_arr(0 * np.ones((height, width), dtype=np.uint8))
+		res = Image.from_arr(0 * np.ones((height, width), dtype=np.uint8))
+		res.color_scheme = GRAY
+		return res
 
 	@staticmethod
 	def blank_mask_like(target):
-		tmp = target.copy()
-		tmp.image = 0 * np.ones_like(target.img, dtype=np.uint8)
-		return tmp
+		res = Image.from_arr(0 * np.ones((target.img.shape[0], target.img.shape[1]), dtype=np.uint8))
+		res.color_scheme = GRAY
+		return res
 
 	def save(self, filename, flags=None):
 		if flags is None:

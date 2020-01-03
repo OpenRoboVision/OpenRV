@@ -21,7 +21,7 @@ class App:
 		self.quit_key = quit_key
 		self.writer = None
 		self.writer_data = None
-		self.capture = cv2.VideoCapture(src)
+		self.capture = cv2.VideoCapture(src) if src != -1 else None
 		if src != -1 and (self.capture is None or not self.capture.isOpened()):
 			raise CaptureException("Can't open capture with src = {}".format(src))
 		if not (writer is None):

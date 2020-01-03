@@ -8,24 +8,34 @@ class Contour:
 	def __init__(self, contour):
 		self.contour = contour
 
-	def to_line(self):
+	def as_line(self):
 		vx, vy, x, y = cv2.fitLine(self.contour, cv2.DIST_L2, 0, 0.01, 0.01)
 		return np.array([(x, y), np.math.degrees(np.math.atan2(vx, vy))])
 
-	def to_ellipse(self):
+	def as_ellipse(self):
 		return cv2.fitEllipse(self.contour)
 
-	def to_circle(self):
+	def as_circle(self):
 		(x, y), radius = cv2.minEnclosingCircle(self.contour)
 		center = (int(x), int(y))
 		radius = int(radius)
 		return np.array([center, radius])
 
-	def to_rect(self):
+	def as_rect(self):
 		rct = cv2.minAreaRect(self.contour)
 		box = cv2.boxPoints(rct)
 		box = np.int0(box)
 		self.contour = box
+		return self
+
+	def as_bbox(self):
+		pts = cv2.boundingRect(self.contour)
+		self.contour = np.array([
+			[pts[0], pts[1]],
+			[pts[0]+pts[2], pts[1]],
+			[pts[0]+pts[2], pts[1]+pts[3]],
+			[pts[0], pts[1]+pts[3]]
+			])
 		return self
 
 	def bbox(self):
@@ -88,6 +98,23 @@ class Contour:
 		self.contour = cv2.approxPolyDP(self.contour, epsilon, True)
 		return self
 
+	def copy(self):
+		return Contour(self.contour)
+
+	@property
+	def x(self):
+		return self.center()[0]
+
+	@property
+	def y(self):
+		return self.center()[1]
+
+	def get_x(self):
+		return self.center()[0]
+
+	def get_y(self):
+		return self.center()[1]
+
 	def __repr__(self):
 		return f'<Contour area: {self.area()}, ' \
 			   f'perimeter: {self.perimeter()}, center: {self.center()}, angle: {self.get_angle()}>'
@@ -114,8 +141,12 @@ class Contours:
 		self.array = list(map(expr, self.array))
 		return self
 
-	def sort(self, key, comp=None, reverse=False):
-		self.array = sorted(self.array, cmp=comp, key=key, reversed=reverse)
+	def sort(self, key, reverse=False):
+		self.array = sorted(self.array, key=key, reverse=reverse)
+		return self
+
+	def sort_area(self, reverse=False):
+		self.array = sorted(self.array, key=Contour.area, reverse=reverse)
 		return self
 
 	def push(self, obj):
@@ -132,6 +163,10 @@ class Contours:
 	def translate(self, x ,y):
 		for i in range(len(self.array)):
 			self.array[i].contour += [x, y]
+		return self
+
+	def expression(self, expr):
+		self.array = list(map(expr, self.array))
 		return self
 
 	def __iter__(self):
