@@ -11,12 +11,14 @@ def main(last, data, inst):
 	gray = frame.gray()	# Convert to GRAYSCALE
 
 	sobel    = gray.copy().sobel(1, 0, 5)	# Standart OpenCV Sobel operator
-	sobel_2d = gray.copy().sobel_2d(size=3)	# Combination of X and Y Sobels
+	sobel_2d = gray.copy().sobel_2d()		# Combination of X and Y Sobels
 	canny    = gray.copy().canny(50, 200)	# Standart Canny edge detector
+	laplace  = gray.copy().laplace()		# Laplacian edge detector
 
 	sobel.show('Sobel')	
-	sobel_2d.show('Sobel 2D')
+	sobel_2d.bgr().show('Sobel 2D')
 	canny.show('Canny')
+	laplace.show('Laplacian')
 
 
 if __name__ == '__main__':

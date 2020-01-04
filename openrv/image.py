@@ -7,7 +7,8 @@ from openrv.contour import Contour, Contours
 import skimage.filters
 import skimage.morphology
 from scipy import ndimage as ndi
-
+from openrv import utils
+from imutils.perspective import order_points
 
 aruco_params = aruco.DetectorParameters_create()
 
@@ -187,6 +188,8 @@ class Image:
 		""" 
 		Crop a part of self.image
 		"""
+		if x2 < 0: x2 = self.width + x2
+		if y2 < 0: y2 = self.height + y2
 		self.image = self.image[int(y1):int(y2), int(x1):int(x2)]
 		return self
 
@@ -280,6 +283,21 @@ class Image:
 		return self
 
 
+	def wrap_perspective_rect(self, points, width, height):
+		if len(points) != 4:
+			raise ValueError('Contour\'s number of curners must be equal to 4')
+
+		src = order_points(points.reshape(4, 2))
+		dst = np.array([
+				[0, 0],
+				[width, 0],
+				[width, height],
+				[0, height]
+			])
+		self.correct_perspective(src, dst).crop(0, 0, width, height)
+		return self
+
+
 	def avg_color(self):
 		""" 
 		Get an average color of the image
@@ -316,6 +334,7 @@ class Image:
 		return self
 
 
+
 	def thresh(self, level, mode=cv2.THRESH_BINARY, max_val=255):
 		""" 
 		Global thresholding
@@ -341,7 +360,7 @@ class Image:
 		"""
 		self.to_gray()
 		mask = skimage.filters.threshold_sauvola(self.image, window_size=win_size, k=k, r=r)
-		self.image = 255 * np.uint8(self.image > mask)
+		self.image = np.uint8(255 * (self.image > mask))
 		return self
 
 	def thresh_niblack(self, win_size=15, k=0.2):
@@ -350,7 +369,7 @@ class Image:
 		"""
 		self.to_gray()
 		mask = skimage.filters.threshold_niblack(self.image, window_size=win_size, k=k)
-		self.image = 255 * np.uint8(self.image > mask)
+		self.image = np.uint8(255 * (self.image > mask))
 		return self
 
 	def thresh_li(self):
@@ -359,7 +378,14 @@ class Image:
 		"""
 		self.to_gray()
 		mask = skimage.filters.threshold_li(self.image)
-		self.image = 255 * np.uint8(self.image > mask)
+		self.image = np.uint8(255 * (self.image > mask))
+		return self
+
+
+	def thresh_isodata(self):
+		self.to_gray()
+		mask = skimage.filters.threshold_isodata(self.image)
+		self.image = np.uint8(255 * (self.image > mask))
 		return self
 
 
@@ -414,17 +440,15 @@ class Image:
 		return self
 
 
-	def _split_blocks(self, a, b, force=False):
+	def split_blocks(self, a, b, force=False):
 		arr = self.image.copy()
-		if any([s % a != 0 for s in self.image.shape[:2]]) or any([s % b != 0 for s in self.image.shape[:2]]):
-			if not force:
-				raise ValueError(f'Unable to split image with shape {self.image.shape[:2][::-1]} into non-overlapping {a}x{b} blocks')
-			else:
-				arr = arr[:b * (self.size()[1]//b), :a * (self.size()[0]//a)]
-		vert_split = np.array_split(arr, arr.shape[0]//b)
-		split = np.array([np.uint8(np.hsplit(splice, arr.shape[1]//a)) for splice in vert_split])
-		return split
-		# return np.uint8(np.array([np.hsplit(a, arr.shape[1]//a) for a in ]))
+		matrix = []
+		for x in range(0, self.width, a):
+			row = []
+			for y in range(0, self.height, b):
+				row.append(self.copy().crop(x, y, x+a, y+b))
+			matrix.append(row)
+		return np.rot90(np.array(matrix))[::-1].tolist()
 
 
 
@@ -434,31 +458,31 @@ class Image:
 		"""
 		self.to_gray()
 		skel, distance = skimage.morphology.medial_axis(self.image, return_distance=True)
-		self.image = np.uint8(distance * skel)
+		self.image = np.uint8(255 * distance * skel)
 		return self
 
 
-	def skeletonize(self):
+	def skeletonize_sk(self):
 		"""
 		Classic skeletonization
 		"""
 		self.to_gray()
-		self.image = 255 * np.uint8(skimage.morphology.skeletonize(self.image/255.))
+		self.image = np.uint8(255 * skimage.morphology.skeletonize(self.image/255.))
 		return self
 
 
-	def sobel_2d(self, size=3, ultra_bright=False):
+	def skeletonize(self, size=(3, 3)):
+		self.to_gray()
+		self.image = imutils.skeletonize(self.image, size=size)
+		return self
+
+
+	def sobel_2d(self):
 		"""
 		Two demensional Sobel operator
 		"""
 		self.to_gray()
-		gray = cv2.GaussianBlur(self.image, (size,) * 2, 0)
-		grad_x = cv2.Sobel(gray, cv2.CV_16S, 1, 0, ksize=size, scale=1, delta=0, borderType=cv2.BORDER_DEFAULT)
-		grad_y = cv2.Sobel(gray, cv2.CV_16S, 0, 1, ksize=size, scale=1, delta=0, borderType=cv2.BORDER_DEFAULT)
-		abs_grad_x = cv2.convertScaleAbs(grad_x)
-		abs_grad_y = cv2.convertScaleAbs(grad_y)
-		alpha = 2. if ultra_bright else 1.
-		self.image = cv2.addWeighted(abs_grad_x, alpha, abs_grad_y, alpha, 0)
+		self.image = np.uint8(255 * skimage.filters.sobel(self.image))
 		return self
 
 
@@ -479,6 +503,12 @@ class Image:
 		"""
 		self.to_gray()
 		self.image = cv2.Canny(self.img, lower, upper)
+		return self
+
+
+	def laplace(self, ksize=3):
+		self.to_gray()
+		self.image = np.uint8(255 * skimage.filters.laplace(self.image, ksize=ksize))
 		return self
 
 
@@ -817,12 +847,12 @@ class Image:
 		return self
 
 	def extrema_mask(self, h=0.5):
-		self.image = 255 * np.uint8(skimage.morphology.extrema.h_maxima(self.image, h))
+		self.image = np.uint8(255 * skimage.morphology.extrema.h_maxima(self.image, h))
 		return self
 
 	def fill_holes(self):
 		self.to_gray()
-		self.image = 255 * np.uint8(ndi.binary_fill_holes(self.image))
+		self.image = np.uint8(255 * ndi.binary_fill_holes(self.image))
 		return self
 
 	def inpaint(self, mask, radius, mode=cv2.INPAINT_TELEA):

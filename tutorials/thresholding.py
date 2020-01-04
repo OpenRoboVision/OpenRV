@@ -18,6 +18,7 @@ def main(last, data, inst):
 	niblack = frame.copy().thresh_niblack(win_size=15, k=0.2).show('Niblack')  # Niblack local thresholding
 	li 		= frame.copy().thresh_li().show('Li')						 	   # Li global thresholding
 	box		= frame.copy().adaptive_box_thresh((15, 15)).show('Box thresh')	   # Thresholding using diff of cv2.boxFilter
+	isodata = frame.copy().thresh_isodata().show('Isodata')
 
 	adaptive = frame.copy().adaptive_thresh(11, 2, method=cv2.ADAPTIVE_THRESH_MEAN_C)  # OpenCV standart adaptiveThreshold
 	adaptive.show('Adaptive')

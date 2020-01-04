@@ -93,7 +93,7 @@ class Contour:
 		return self
 
 
-	def approx(tolerance):
+	def approx(self, tolerance):
 		epsilon = tolerance * cv2.arcLength(self.contour, True)
 		self.contour = cv2.approxPolyDP(self.contour, epsilon, True)
 		return self
@@ -108,6 +108,10 @@ class Contour:
 	@property
 	def y(self):
 		return self.center()[1]
+
+	@property
+	def corners(self):
+		return len(self.contour)
 
 	def get_x(self):
 		return self.center()[0]
@@ -135,6 +139,10 @@ class Contours:
 
 	def filter(self, expr):
 		self.array = list(filter(expr, self.array))
+		return self
+
+	def filter_corners_number(self, number, approx_tolerance):
+		self.array = list(filter(lambda cnt: cnt.copy().approx(approx_tolerance).corners == number, self.array))
 		return self
 
 	def map(self, expr):
