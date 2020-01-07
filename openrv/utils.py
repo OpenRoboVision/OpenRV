@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.spatial import distance as sci_dist
 from collections import OrderedDict
-import math 
+import math
 
 _colors_dict = OrderedDict({
 		"red": (255, 0, 0),
@@ -64,3 +64,25 @@ def constrain(a, low, high):
 	if a > high:
 		return high
 	return a
+
+
+def draw_histogram(hist, block_process=True):
+	from matplotlib import pyplot as plt
+	plt.clf()
+	color = ('b','g','r')
+	if len(hist.shape) == 2:
+		color = ('b')
+
+	for i, col in enumerate(color):
+		plt.plot(hist[i], color=col)
+		plt.xlim([0,256])
+	if block_process:
+		plt.show()
+	else:
+		plt.draw()
+		plt.pause(0.0000001)
+
+
+
+def get_morph(elem, size):
+	return cv2.getStructuringElement(elem, size)

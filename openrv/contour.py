@@ -3,6 +3,7 @@ import numpy as np
 import openrv.utils
 import math
 
+
 class Contour:
 
 	def __init__(self, contour):
@@ -32,10 +33,10 @@ class Contour:
 		pts = cv2.boundingRect(self.contour)
 		self.contour = np.array([
 			[pts[0], pts[1]],
-			[pts[0]+pts[2], pts[1]],
-			[pts[0]+pts[2], pts[1]+pts[3]],
-			[pts[0], pts[1]+pts[3]]
-			])
+			[pts[0] + pts[2], pts[1]],
+			[pts[0] + pts[2], pts[1] + pts[3]],
+			[pts[0], pts[1] + pts[3]]
+		])
 		return self
 
 	def bbox(self):
@@ -92,15 +93,13 @@ class Contour:
 
 		return self
 
-
 	def get_angles(self):
 		outp = []
 		pts = self.contour
 		for i in range(len(pts)):
-			a, b, c = pts[i][0], pts[(i+1)%len(pts)][0], pts[(i+2)%len(pts)][0]
+			a, b, c = pts[i][0], pts[(i + 1) % len(pts)][0], pts[(i + 2) % len(pts)][0]
 			outp.append(openrv.utils.angle_3pts(a, b, c))
 		return outp
-
 
 	def cosine_sum(self):
 		angles = self.get_angles()
@@ -140,8 +139,7 @@ class Contour:
 		return self.__repr__()
 
 
-
-class Contours:
+class ContourSet:
 
 	def __init__(self, data):
 		self.array = list(data)
@@ -181,13 +179,9 @@ class Contours:
 		del self.array[index]
 		return self
 
-	def translate(self, x ,y):
+	def translate(self, x, y):
 		for i in range(len(self.array)):
 			self.array[i].contour += [x, y]
-		return self
-
-	def expression(self, expr):
-		self.array = list(map(expr, self.array))
 		return self
 
 	def __iter__(self):

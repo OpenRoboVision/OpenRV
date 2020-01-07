@@ -3,28 +3,22 @@ import cv2
 import imutils
 import cv2.aruco as aruco
 from openrv.colors import *
-from openrv.contour import Contour, Contours
+from openrv.contour import Contour, ContourSet
 import skimage.filters
 import skimage.morphology
 import skimage.feature
 from scipy import ndimage as ndi
-from openrv import utils
 from imutils.perspective import order_points
+from openrv.defines import BGR, GRAY, HSV
 
 aruco_params = aruco.DetectorParameters_create()
 
 
-def get_morph(elem, size):
-	return cv2.getStructuringElement(elem, size)
-
-
 class Image:
-	cv = cv2
 
 	def __init__(self):
 		self.image = np.array([])
 		self.color_scheme = BGR
-
 
 	def show(self, name='Frame', id=None):
 		""" 
@@ -44,7 +38,6 @@ class Image:
 		cv2.imshow(name, self.image)
 		return self
 
-
 	def resize(self, width=None, height=None, inter=cv2.INTER_CUBIC):
 		""" 
 		Resize self.image with given params
@@ -61,9 +54,8 @@ class Image:
 		if width is None or height is None:
 			self.image = imutils.resize(self.image, width=width, height=height, inter=inter)
 		else:
-			self.image = cv2.resize(self.image, (width, height))
+			self.image = cv2.resize(self.image, tuple(map(int, (width, height))))
 		return self
-
 
 	def gray(self):
 		""" 
@@ -80,7 +72,6 @@ class Image:
 		res.color_scheme = GRAY
 		return res
 
-
 	def to_gray(self):
 		""" 
 		Convert this image to GRAYSCALE
@@ -94,7 +85,6 @@ class Image:
 		self.image = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY)
 		self.color_scheme = GRAY
 		return self
-
 
 	def bgr(self):
 		""" 
@@ -113,7 +103,6 @@ class Image:
 			res.color_scheme = BGR
 		return res
 
-
 	def to_bgr(self):
 		""" 
 		Convert this image to BGR
@@ -129,7 +118,6 @@ class Image:
 			self.image = cv2.cvtColor(self.image, cv2.COLOR_GRAY2BGR)
 			self.color_scheme = BGR
 		return self
-
 
 	def hsv(self):
 		""" 
@@ -148,7 +136,6 @@ class Image:
 			res.color_scheme = HSV
 		return res
 
-
 	def to_hsv(self):
 		""" 
 		Convert this image to HSV
@@ -164,7 +151,6 @@ class Image:
 			self.image = cv2.cvtColor(cv2.cvtColor(self.image, cv2.COLOR_GRAY2BGR), cv2.COLOR_BGR2HSV)
 			self.color_scheme = HSV
 		return self
-
 
 	def rotate(self, angle, bound=False):
 		""" 
@@ -184,16 +170,19 @@ class Image:
 			self.image = imutils.rotate(self.image, -angle)
 		return self
 
-
 	def crop(self, x1, y1, x2, y2):
 		""" 
 		Crop a part of self.image
 		"""
+		if x2 is None: x2 = self.width
+		if y2 is None: y2 = self.height
 		if x2 < 0: x2 = self.width + x2
 		if y2 < 0: y2 = self.height + y2
 		self.image = self.image[int(y1):int(y2), int(x1):int(x2)]
 		return self
 
+	def scale(self, val):
+		self.resize(width=self.width * val)
 
 	def apply_mask(self, mask):
 		""" 
@@ -209,7 +198,6 @@ class Image:
 		mask = mask.copy().gray()
 		self.image = cv2.bitwise_and(self.image, self.image, mask=mask.image)
 		return self
-
 
 	def find_color(self, base_color=None, sensitivity=25, lower=(0, 0, 0), upper=(255, 255, 255), sens_mult=1.0):
 		""" 
@@ -241,7 +229,6 @@ class Image:
 		self.image = cv2.inRange(res.img, np.array(lower), np.array(upper))
 		return self
 
-
 	def find_aruco(self, dict_type=aruco.DICT_ARUCO_ORIGINAL):
 		""" 
 		Returns list of corners and ids of found markers
@@ -256,7 +243,6 @@ class Image:
 		corners, ids, _ = aruco.detectMarkers(self.image, aruco.Dictionary_get(dict_type),
 											  parameters=aruco_params)
 		return corners, ids
-
 
 	def draw_aruco(self, corners, ids):
 		""" 
@@ -283,21 +269,19 @@ class Image:
 		self.image = cv2.warpPerspective(img, M, (w, h), flags=cv2.INTER_LINEAR)
 		return self
 
-
 	def wrap_perspective_rect(self, points, width, height):
 		if len(points) != 4:
 			raise ValueError('Contour\'s number of curners must be equal to 4')
 
 		src = order_points(points.reshape(4, 2))
 		dst = np.array([
-				[0, 0],
-				[width, 0],
-				[width, height],
-				[0, height]
-			])
+			[0, 0],
+			[width, 0],
+			[width, height],
+			[0, height]
+		])
 		self.correct_perspective(src, dst).crop(0, 0, width, height)
 		return self
-
 
 	def avg_color(self):
 		""" 
@@ -312,10 +296,11 @@ class Image:
 			h, s, v = self.copy().hsv()._split()
 			return int(np.mean(h)), int(np.mean(s)), int(np.mean(v))
 
-
 	def _split(self):
 		return cv2.split(self.image)
 
+	def split(self):
+		return list(map(lambda ch: Image.from_arr(ch, scheme=GRAY), self._split()))
 
 	def change_contrast(self, level):
 		""" 
@@ -334,8 +319,6 @@ class Image:
 		self.image = np.uint8(frame)
 		return self
 
-
-
 	def thresh(self, level, mode=cv2.THRESH_BINARY, max_val=255):
 		""" 
 		Global thresholding
@@ -353,7 +336,6 @@ class Image:
 			self.to_gray()
 		self.image = cv2.threshold(self.image, level, max_val, mode)[1]
 		return self
-
 
 	def thresh_sauvola(self, win_size=15, k=0.2, r=None):
 		"""
@@ -382,13 +364,11 @@ class Image:
 		self.image = np.uint8(255 * (self.image > mask))
 		return self
 
-
 	def thresh_isodata(self):
 		self.to_gray()
 		mask = skimage.filters.threshold_isodata(self.image)
 		self.image = np.uint8(255 * (self.image > mask))
 		return self
-
 
 	def thresh_bradley(self, S_k=8, T=15.0):
 		# TODO: Make faster
@@ -400,53 +380,50 @@ class Image:
 		img = self.image
 		h, w = self.shape[:2]
 
-		S = w/S_k
-		s2 = S/2
+		S = w / S_k
+		s2 = S / 2
 		T = 15.0
 
 		int_img = np.zeros_like(img, dtype=np.uint32)
 		for col in range(w):
 			for row in range(h):
-				int_img[row,col] = img[0:row,0:col].sum()
+				int_img[row, col] = img[0:row, 0:col].sum()
 
-		self.image = np.zeros_like(img) 
-		   
+		self.image = np.zeros_like(img)
+
 		for col in range(w):
 			for row in range(h):
-				y0 = int(max(row-s2, 0))
-				y1 = int(min(row+s2, h-1))
-				x0 = int(max(col-s2, 0))
-				x1 = int(min(col+s2, w-1))
-				count = (y1-y0)*(x1-x0)
-				sum_ = int_img[y1, x1]-int_img[y0, x1]-int_img[y1, x0]+int_img[y0, x0]
-				self.image[row,col] = 0 if img[row, col]*count < sum_*(100.-T)/100. else 255
+				y0 = int(max(row - s2, 0))
+				y1 = int(min(row + s2, h - 1))
+				x0 = int(max(col - s2, 0))
+				x1 = int(min(col + s2, w - 1))
+				count = (y1 - y0) * (x1 - x0)
+				sum_ = int_img[y1, x1] - int_img[y0, x1] - int_img[y1, x0] + int_img[y0, x0]
+				self.image[row, col] = 0 if img[row, col] * count < sum_ * (100. - T) / 100. else 255
 		print('calc')
 		return self
-
 
 	def adaptive_box_thresh(self, winSize, ratio=0.):
 		self.to_gray()
 		img_smooth = cv2.boxFilter(self.image, cv2.CV_32FC1, winSize)
-		out = self.image - (1.0-ratio) * img_smooth
-		out[out>=0] = 255
-		out[out<0] = 0
+		out = self.image - (1.0 - ratio) * img_smooth
+		out[out >= 0] = 255
+		out[out < 0] = 0
 		self.image = np.uint8(out)
 		return self
 
-
-	def adaptive_thresh(self, block_size, C, max_val=255, method=cv2.ADAPTIVE_THRESH_GAUSSIAN_C, thresh_type=cv2.THRESH_BINARY):
+	def adaptive_thresh(self, block_size, C, max_val=255, method=cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+						thresh_type=cv2.THRESH_BINARY):
 		if self.color_scheme != GRAY:
 			self.to_gray()
 		self.image = cv2.adaptiveThreshold(self.image, max_val, method, thresh_type, block_size, C)
 		return self
 
-
 	def local_adaptive_thresh(self, block_size):
 		if self.color_scheme != GRAY:
 			self.to_gray()
-		self.image = np.uint8(255*(self.image > skimage.filters.threshold_local(self.image, block_size, offset=10)))
+		self.image = np.uint8(255 * (self.image > skimage.filters.threshold_local(self.image, block_size, offset=10)))
 		return self
-
 
 	def split_blocks(self, a, b, force=False):
 		arr = self.image.copy()
@@ -454,11 +431,9 @@ class Image:
 		for x in range(0, self.width, a):
 			row = []
 			for y in range(0, self.height, b):
-				row.append(self.copy().crop(x, y, x+a, y+b))
+				row.append(self.copy().crop(x, y, x + a, y + b))
 			matrix.append(row)
 		return np.rot90(np.array(matrix))[::-1].tolist()
-
-
 
 	def skeletonize_medial(self):
 		"""
@@ -469,21 +444,18 @@ class Image:
 		self.image = np.uint8(255 * distance * skel)
 		return self
 
-
 	def skeletonize_sk(self):
 		"""
 		Classic skeletonization
 		"""
 		self.to_gray()
-		self.image = np.uint8(255 * skimage.morphology.skeletonize(self.image/255.))
+		self.image = np.uint8(255 * skimage.morphology.skeletonize(self.image / 255.))
 		return self
-
 
 	def skeletonize(self, size=(3, 3)):
 		self.to_gray()
 		self.image = imutils.skeletonize(self.image, size=size)
 		return self
-
 
 	def sobel_2d(self):
 		"""
@@ -492,7 +464,6 @@ class Image:
 		self.to_gray()
 		self.image = np.uint8(255 * skimage.filters.sobel(self.image))
 		return self
-
 
 	def sobel(self, x, y, size, scale=1, delta=0, border_type=cv2.BORDER_CONSTANT):
 		"""
@@ -504,7 +475,6 @@ class Image:
 							   borderType=border_type)
 		return self
 
-
 	def canny(self, lower, upper):
 		"""
 		Canny edge detector
@@ -513,12 +483,10 @@ class Image:
 		self.image = cv2.Canny(self.img, lower, upper)
 		return self
 
-
 	def laplace(self, ksize=3):
 		self.to_gray()
 		self.image = np.uint8(255 * skimage.filters.laplace(self.image, ksize=ksize))
 		return self
-
 
 	def get(self, x, y):
 		"""
@@ -528,13 +496,11 @@ class Image:
 			return cv2.cvtColor(np.uint8([[self.image[y, x]]]), cv2.COLOR_BGR2HSV)[0][0]
 		return self.image[y, x]
 
-
 	def size(self):
 		"""
 		Returns width, height of the image
 		"""
 		return self.image.shape[1], self.image.shape[0]
-
 
 	def polygon(self, points, color=RED, thickness=1, is_closed=True):
 		""" 
@@ -558,7 +524,6 @@ class Image:
 			self.image = cv2.polylines(self.image, points, is_closed, color)
 		return self
 
-
 	def line(self, a, b, color=RED, thickness=1, mode=cv2.LINE_AA):
 		""" 
 		Draw a line
@@ -576,7 +541,6 @@ class Image:
 		"""
 		self.image = cv2.line(self.image, tuple(a), tuple(b), color, thickness, mode)
 		return self
-
 
 	def ellipse(self, center, width, height, color=RED, thickness=1):
 		""" 
@@ -596,7 +560,6 @@ class Image:
 		self.image = cv2.ellipse(self.image, center, (width, height), 0, 0, 360, color=color, thickness=thickness)
 		return self
 
-
 	def circle(self, center, radius, color=RED, thickness=1):
 		""" 
 		Draw a circle
@@ -614,28 +577,24 @@ class Image:
 		self.image = cv2.circle(self.image, center, radius, color, thickness=thickness)
 		return self
 
-
 	def rect(self, a, b, color=RED, thickness=1, is_size=False):
 		b = ((a[0] + b[0]) if is_size else b[0], (a[1] + b[1]) if is_size else b[1])
 		self.image = cv2.rectangle(self.image, a, b, color, thickness=thickness)
 		return self
 
-
 	def text(self, message, pos, font=cv2.FONT_HERSHEY_PLAIN, scale=1, line=1, thickness=1, color=(255,) * 3):
 		self.image = cv2.putText(self.image, message, pos, font, scale, color, thickness=thickness, lineType=line)
 		return self
-
 
 	def find_contours(self, mode=cv2.RETR_TREE, method=cv2.CHAIN_APPROX_SIMPLE, with_hierarchy=False):
 		_, cnts, hierarchy = cv2.findContours(self.image, mode, method)
 		contours = []
 		for cnt in cnts:
 			contours.append(Contour(cnt))
-		return (Contours(contours), hierarchy) if with_hierarchy else Contours(contours)
-
+		return (ContourSet(contours), hierarchy) if with_hierarchy else ContourSet(contours)
 
 	def draw_contours(self, contours, color=RED, thickness=1, index=-1, random_color=False):
-		if not (type(contours) in [Contours, tuple, list]):
+		if not (type(contours) in [ContourSet, tuple, list]):
 			contours = [contours]
 		if not random_color:
 			self.image = cv2.drawContours(self.image, np.array(list(map(lambda c: c.contour, contours))), index,
@@ -647,21 +606,17 @@ class Image:
 				self.image = cv2.drawContours(self.image, [cnt.contour], index, color=color, thickness=thickness)
 		return self
 
-
 	def blur(self, ksize):
 		self.image = cv2.blur(self.image, ksize)
 		return self
-
 
 	def gaussian(self, size, sigma_x, sigma_y=0):
 		self.image = cv2.GaussianBlur(self.image, size, sigma_x, sigmaY=sigma_y)
 		return self
 
-
 	def median(self, alpha):
 		self.image = cv2.medianBlur(self.image, alpha)
 		return self
-
 
 	def bilateral(self, d, sigma_color, sigma_space):
 		self.image = cv2.bilateralFilter(self.image, d, sigma_color, sigma_space)
@@ -684,16 +639,15 @@ class Image:
 		self.image = lower
 		return self
 
-	def overlay(self, other, alpha=0.5, pos=(0,0), fill=False):
+	def overlay(self, other, alpha=0.5, pos=(0, 0), fill=False):
 		other = other.copy()
 		if fill:
 			other = other.resize(width=other.size()[0], height=other.size()[1])
-			pos = (0,0)
+			pos = (0, 0)
 
 		overlay = self.copy().put(other, pos[0], pos[1])
 		self.image = cv2.addWeighted(self.image, 1, overlay.image, alpha, 0)
 		return self
-
 
 	def erode(self, kernel, iterations=1):
 		"""
@@ -704,7 +658,6 @@ class Image:
 		self.image = cv2.erode(self.image, kernel, iterations=iterations)
 		return self
 
-
 	def dilate(self, kernel, iterations=1):
 		"""
 		Morphology dilation
@@ -713,7 +666,6 @@ class Image:
 			kernel = np.ones(tuple(kernel))
 		self.image = cv2.dilate(self.image, kernel, iterations=iterations)
 		return self
-
 
 	def morph_gradient(self, kernel):
 		if type(kernel) in [tuple, list]:
@@ -780,7 +732,6 @@ class Image:
 		self.image = background
 		return self
 
-
 	def denoise(self, h=10, template_size=7, search_size=21):
 		if self.color_scheme == GRAY:
 			self.image = cv2.fastNlMeansDenoising(self.image, None, h, template_size, search_size)
@@ -792,18 +743,16 @@ class Image:
 		self.image = cv2.merge((b, g, r))
 		return self
 
-
 	def sharper(self):
-		kernel = np.array([[-1,-1,-1], [-1,9,-1], [-1,-1,-1]])
+		kernel = np.array([[-1, -1, -1], [-1, 9, -1], [-1, -1, -1]])
 		self.image = cv2.filter2D(self.image, -1, kernel)
 		return self
 
-	def adjust_contrast(self, gamma):		
+	def adjust_contrast(self, gamma):
 		invGama = 1.0 / float(gamma)
 		table = np.array([((i / 255.0) ** invGama) * 255 for i in np.arange(0, 256)]).astype("uint8")
 		self.image = np.uint8(cv2.LUT(self.image, table))
 		return self
-
 
 	def get_quarter(self, x, y):
 		w, h = self.size()
@@ -819,7 +768,6 @@ class Image:
 			return 4
 		return 0
 
-
 	def deltas(self, kx=1, ky=0):
 		if self.color_scheme != GRAY:
 			self.to_gray()
@@ -828,8 +776,8 @@ class Image:
 		for i in range(1, w):
 			for j in range(1, h):
 				pix = self.get(i, j)
-				dx = abs(int(pix) - int(self.get(i-kx, j-ky)))
-				buff[j,i] = dx
+				dx = abs(int(pix) - int(self.get(i - kx, j - ky)))
+				buff[j, i] = dx
 		self.image = np.uint8(buff)
 		return self
 
@@ -845,14 +793,12 @@ class Image:
 		self.image = np.uint8(buff)
 		return self
 
-
-	def DoG(self, alpha=6.6, betta=1.5, size=(0,0)):
+	def DoG(self, alpha=6.6, betta=1.5, size=(0, 0)):
 		self.to_gray()
 		g1 = cv2.GaussianBlur(self.image, size, alpha)
 		g2 = cv2.GaussianBlur(self.image, size, betta)
 		self.image = g1 - g2
 		return self
-
 
 	def find_corners_mask(self, blockSize, ksize, k, alpha=0.01):
 		self.to_gray()
@@ -877,7 +823,7 @@ class Image:
 		return self
 
 	def dist_transform(self, mode=cv2.DIST_L2):
-		self.image = 255-(np.uint8(ndi.distance_transform_edt(self.image))*3)
+		self.image = 255 - (np.uint8(ndi.distance_transform_edt(self.image)) * 3)
 		return self
 
 	def mean_shift_filter(self, spatial_radius, color_radius):
@@ -934,7 +880,7 @@ class Image:
 		markers = ndi.label(localMax, structure=ksize)[0]
 		labels = skimage.morphology.watershed(-D, markers, mask=thresh)
 
-		contours = Contours([])
+		contours = ContourSet([])
 
 		for label in np.unique(labels):
 			if label == 0:
@@ -944,12 +890,54 @@ class Image:
 			mask[labels == label] = 255
 
 			cnts = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL,
-				cv2.CHAIN_APPROX_SIMPLE)
+									cv2.CHAIN_APPROX_SIMPLE)
 			cnts = imutils.grab_contours(cnts)
 			c = max(cnts, key=cv2.contourArea)
 			contours.push(Contour(c))
 
 		return contours
+
+	def white_balance(self):
+		original_scheme = self.color_scheme
+		self.to_bgr()
+		result = cv2.cvtColor(self.img, cv2.COLOR_BGR2LAB)
+		avg_a = np.average(result[:, :, 1])
+		avg_b = np.average(result[:, :, 2])
+		result[:, :, 1] = result[:, :, 1] - ((avg_a - 128) * (result[:, :, 0] / 255.0) * 1.1)
+		result[:, :, 2] = result[:, :, 2] - ((avg_b - 128) * (result[:, :, 0] / 255.0) * 1.1)
+		self.image = cv2.cvtColor(result, cv2.COLOR_LAB2BGR)
+		if original_scheme == GRAY: self.to_gray()
+		if original_scheme == HSV: self.to_hsv()
+		return self
+
+
+	def hist(self):
+		if self.color_scheme ==GRAY:
+			return cv2.calcHist([self.img],[0],None,[256],[0,256])
+		else:
+			return np.array([cv2.calcHist([channel],[0],None,[256],[0,256]) for channel in self._split()])
+
+	def find_barcode(self, draw=False):
+		from pyzbar import pyzbar
+		barcodes = pyzbar.decode(self.image)
+		data = []
+		for barcode in barcodes:
+			barcodeData = barcode.data.decode()
+			barcodeType = barcode.type
+			(x, y, w, h) = barcode.rect
+			data.append({'text': barcodeData, 'type': str(barcodeType), 'rect': (x, y, w, h)})
+			if draw:
+				cv2.rectangle(self.image, (x, y), (x + w, y + h), (0, 0, 255), 2)
+				text = "{} ({})".format(barcodeData, barcodeType)
+				cv2.putText(self.image, text, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+
+		return data
+
+
+	# def find_blobs(self):		Segmentation fault: 11???
+	# 	keypoints = detector.detect(self.image)
+	# 	self.image = cv2.drawKeypoints(self.image, keypoints, np.array([]), (0,0,255), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
+	# 	return self
 
 
 	@property
@@ -1100,8 +1088,40 @@ class Image:
 		else:
 			raise SystemError(f'Unsopported method \'-\' between {str(type(other))} and Image')
 
+	def __getitem__(self, val):
+		res = self.copy()
+		if len(val) == 2:
+			res.image = res.image[val[0], val[1]]
+		elif len(val) == 1:
+			res.image = res.image[val]
+		return res
+
 	def __repr__(self):
 		return f'<Image shape: {self.shape}, color_scheme: {["BGR", "GRAY", "HSV"][self.color_scheme]}>'
 
 	def __str__(self):
 		return self.__repr__()
+
+# class ImageSet:
+#
+# 	def __init__(self, arr):
+# 		self.array = list(arr)
+#
+# 	def add(self, image: Image):
+# 		self.array.append(image)
+#
+# 	def __iter__(self):
+# 		for elem in self.array:
+# 			yield elem
+#
+# 	def __len__(self):
+# 		return len(self.array)
+#
+# 	def __getitem__(self, ii):
+# 		return self.array[ii]
+#
+# 	def __delitem__(self, ii):
+# 		del self.array[ii]
+#
+# 	def __setitem__(self, ii, val):
+# 		self.array[ii] = val
