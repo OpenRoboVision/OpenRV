@@ -1,4 +1,12 @@
 import numpy as np
+from scipy.spatial import distance as sci_dist
+from collections import OrderedDict
+import math 
+
+_colors_dict = OrderedDict({
+		"red": (255, 0, 0),
+		"green": (0, 255, 0),
+		"blue": (0, 0, 255)})
 
 
 def dist(a, b):
@@ -41,6 +49,13 @@ def order_points(pts):
 	rect[1] = pts[np.argmin(diff)]
 	rect[3] = pts[np.argmax(diff)]
 	return rect
+
+
+def angle_3pts(a, b, c):
+	"""Counterclockwise angle in degrees by turning from a to c around b 
+		Returns a float between 0.0 and 360.0"""
+	ang = math.degrees(math.atan2(c[1]-b[1], c[0]-b[0]) - math.atan2(a[1]-b[1], a[0]-b[0]))
+	return (ang + 360 if ang < 0 else ang) % 180
 
 
 def constrain(a, low, high):

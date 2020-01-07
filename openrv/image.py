@@ -6,6 +6,7 @@ from openrv.colors import *
 from openrv.contour import Contour, Contours
 import skimage.filters
 import skimage.morphology
+import skimage.feature
 from scipy import ndimage as ndi
 from openrv import utils
 from imutils.perspective import order_points
@@ -440,6 +441,13 @@ class Image:
 		return self
 
 
+	def local_adaptive_thresh(self, block_size):
+		if self.color_scheme != GRAY:
+			self.to_gray()
+		self.image = np.uint8(255*(self.image > skimage.filters.threshold_local(self.image, block_size, offset=10)))
+		return self
+
+
 	def split_blocks(self, a, b, force=False):
 		arr = self.image.copy()
 		matrix = []
@@ -623,7 +631,7 @@ class Image:
 		contours = []
 		for cnt in cnts:
 			contours.append(Contour(cnt))
-		return (contours, hierarchy) if with_hierarchy else Contours(contours)
+		return (Contours(contours), hierarchy) if with_hierarchy else Contours(contours)
 
 
 	def draw_contours(self, contours, color=RED, thickness=1, index=-1, random_color=False):
@@ -667,6 +675,14 @@ class Image:
 		self.image = cv2.filter2D(self.image, depth, kernel)
 		return self
 
+	def blur_pyr(self, num_levels):
+		lower = self.image.copy()
+		for i in range(num_levels):
+			lower = cv2.pyrDown(lower)
+		for i in range(num_levels):
+			lower = cv2.pyrUp(lower)
+		self.image = lower
+		return self
 
 	def overlay(self, other, alpha=0.5, pos=(0,0), fill=False):
 		other = other.copy()
@@ -860,13 +876,81 @@ class Image:
 		self.image = cv2.inpaint(self.image, mask.image, radius, mode)
 		return self
 
-	def dist_transform(self, size, mode=cv2.DIST_L2):
-		self.image = np.uint8(cv2.distanceTransform(self.image, mode, size))
+	def dist_transform(self, mode=cv2.DIST_L2):
+		self.image = 255-(np.uint8(ndi.distance_transform_edt(self.image))*3)
 		return self
 
 	def mean_shift_filter(self, spatial_radius, color_radius):
 		self.image = np.uint8(cv2.pyrMeanShiftFiltering(self.image, spatial_radius, color_radius))
 		return self
+
+	def select_roi(self, win_name, fromCenter=False, showCrosshair=True):
+		return cv2.selectROI("Frame", self.image, fromCenter=fromCenter, showCrosshair=showCrosshair)
+
+	def match_template(self, template, method=cv2.TM_CCOEFF, fixed_size=False):
+		gray = self.gray().image
+		template = template.gray().image
+		(tH, tW) = template.shape[:2]
+		found = None
+
+		if not fixed_size:
+			template = cv2.Canny(template, 50, 200)
+			for scale in np.linspace(0.2, 1.0, 40)[::-1]:
+				resized = imutils.resize(gray, width=int(gray.shape[1] * scale))
+				r = gray.shape[1] / float(resized.shape[1])
+
+				if resized.shape[0] < tH or resized.shape[1] < tW:
+					return (-1, -1), (-1, -1)
+
+				edged = cv2.Canny(resized, 50, 200)
+				result = cv2.matchTemplate(edged, template, method)
+				(_, maxVal, _, maxLoc) = cv2.minMaxLoc(result)
+
+				if found is None:
+					found = (maxVal, maxLoc, r)
+				if maxVal > found[0]:
+					found = (maxVal, maxLoc, r)
+
+			(_, maxLoc, r) = found
+			startX, startY = (int(maxLoc[0] * r), int(maxLoc[1] * r))
+			endX, endY = (int((maxLoc[0] + tW) * r), int((maxLoc[1] + tH) * r))
+			return (startX, startY), (endX - startX, endY - startY)
+		else:
+			res = cv2.matchTemplate(gray, template, method)
+			min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
+			if method in [cv2.TM_SQDIFF, cv2.TM_SQDIFF_NORMED]:
+				top_left = min_loc
+			else:
+				top_left = max_loc
+			bottom_right = (top_left[0] + tW, top_left[1] + tH)
+			return top_left, (bottom_right[0] - top_left[0], bottom_right[1] - top_left[1])
+
+	def watershed(self, ksize=np.ones((3, 3)), min_dist=20):
+		self.to_gray()
+		thresh = self.image
+		D = ndi.distance_transform_edt(thresh)
+
+		localMax = skimage.feature.peak_local_max(D, indices=False, min_distance=min_dist, labels=thresh)
+		markers = ndi.label(localMax, structure=ksize)[0]
+		labels = skimage.morphology.watershed(-D, markers, mask=thresh)
+
+		contours = Contours([])
+
+		for label in np.unique(labels):
+			if label == 0:
+				continue
+
+			mask = np.zeros(thresh.shape, dtype="uint8")
+			mask[labels == label] = 255
+
+			cnts = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL,
+				cv2.CHAIN_APPROX_SIMPLE)
+			cnts = imutils.grab_contours(cnts)
+			c = max(cnts, key=cv2.contourArea)
+			contours.push(Contour(c))
+
+		return contours
+
 
 	@property
 	def channels(self):
@@ -972,6 +1056,13 @@ class Image:
 			res = self.image - other.image
 		else:
 			res = self.image - other
+		return Image.from_arr(res)
+
+	def __rsub__(self, other):
+		if other.__class__ == Image:
+			res = other.image - self.image
+		else:
+			res = other - self.image
 		return Image.from_arr(res)
 
 	def __add__(self, other):

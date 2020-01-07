@@ -10,7 +10,7 @@ def main(last, data, inst):
 
 	gray = frame.gray()
 
-	dist                   = gray.copy().dist_transform(0)						# Distance Transform filter
+	dist                   = gray.copy().thresh_li().dist_transform()				# Distance Transform filter
 	mean_shift             = frame.copy().mean_shift_filter(11, 11)				# Mean Shift filter
 	difference_of_gaussian = gray.copy().DoG(alpha=6.6, betta=1.5, size=(3,3))	# Difference of Gaussian blurs
 	deltas                 = gray.copy().deltas(kx=1, ky=0)						# Calculates diff between current pix[x, y] and pix[x-kx, y-ky] (SLOW!!)

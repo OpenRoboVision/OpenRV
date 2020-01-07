@@ -7,7 +7,7 @@ setup(
 	author_email='kivicode@yandex.com',
 	packages=['openrv'],
 	install_requires=['numpy>=1.6', 'opencv-python<4.0', 'scikit-image>=0.16', 'imutils>=0.5.3', 'scipy>=1.3.1'],
-	version='0.1.2',
+	version='0.1.3',
 	license='GNU GPLv3',
 	description='',
 	long_description=open('README.md').read(),

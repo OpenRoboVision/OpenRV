@@ -26,14 +26,14 @@ def main():
 
 	orig = frame.copy().show('Original image')
 
-	frame.to_gray().gaussian((5,5), 0).adaptive_thresh(5, 2)
+	frame.to_gray().gaussian((5,5), 0).adaptive_thresh(5, 2).invert()
 	contours = frame.find_contours(mode=cv2.RETR_LIST).sort_area(reverse=True)
 	cnt = contours.filter_corners_number(4, 0.02)[0].approx(0.02)
 
 	orig.draw_contours(cnt)
 
 	field = orig.gray().wrap_perspective_rect(cnt.contour, 450, 450)
-	field = field.thresh_isodata().invert().erode((3,3))
+	field = field.adaptive_thresh(11, 2).invert().erode((3,3))
 
 	block_size = 50
 	blocks = field.split_blocks(block_size, block_size, True)

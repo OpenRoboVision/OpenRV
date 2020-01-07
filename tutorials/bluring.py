@@ -19,6 +19,7 @@ def main(last, data, inst):
 	bilateral 	= frame.copy().bilateral(5, 70, 70)	# Bilaterial blur
 	box 		= frame.copy().box_filter((10, 10))	# Box filter
 	filtered 	= frame.copy().filter(1, kernel)	# Standart filter with custom kernel
+	pyramid     = frame.copy().blur_pyr(3)			# Sequentional pyrDown and pyrUp 3 times
 
 	classic.show('Classic blur')
 	gaussian.show('Gaussian blur')
@@ -26,6 +27,7 @@ def main(last, data, inst):
 	bilateral.show('Bilateral blur')
 	box.show('Box blur')
 	filtered.show('Filtered')
+	pyramid.show('Pyramid')
 
 
 if __name__ == '__main__':

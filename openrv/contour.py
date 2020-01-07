@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 import openrv.utils
-
+import math
 
 class Contour:
 
@@ -92,6 +92,19 @@ class Contour:
 
 		return self
 
+
+	def get_angles(self):
+		outp = []
+		pts = self.contour
+		for i in range(len(pts)):
+			a, b, c = pts[i][0], pts[(i+1)%len(pts)][0], pts[(i+2)%len(pts)][0]
+			outp.append(openrv.utils.angle_3pts(a, b, c))
+		return outp
+
+
+	def cosine_sum(self):
+		angles = self.get_angles()
+		return sum(list(map(lambda a: math.cos(math.radians(a)), angles)))
 
 	def approx(self, tolerance):
 		epsilon = tolerance * cv2.arcLength(self.contour, True)

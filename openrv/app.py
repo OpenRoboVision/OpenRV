@@ -1,6 +1,6 @@
 import cv2
 import time
-from openrv.image import Image
+from openrv.image import Image, np
 
 
 class CaptureException(Exception):
@@ -21,6 +21,7 @@ class App:
 		self.quit_key = quit_key
 		self.writer = None
 		self.writer_data = None
+		self.trackers = {}
 		self.capture = cv2.VideoCapture(src) if src != -1 else None
 		if src != -1 and (self.capture is None or not self.capture.isOpened()):
 			raise CaptureException("Can't open capture with src = {}".format(src))
@@ -58,6 +59,30 @@ class App:
 			self.capture.release()
 		cv2.destroyAllWindows()
 
+
+	def create_tracker(self, name, tracker_type='csrt'):
+
+		OPENCV_OBJECT_TRACKERS = {
+			"csrt": cv2.TrackerCSRT_create,
+			"kcf": cv2.TrackerKCF_create,
+			"boosting": cv2.TrackerBoosting_create,
+			"mil": cv2.TrackerMIL_create,
+			"tld": cv2.TrackerTLD_create,
+			"medianflow": cv2.TrackerMedianFlow_create,
+			"mosse": cv2.TrackerMOSSE_create
+		}
+		self.trackers[name] = OPENCV_OBJECT_TRACKERS[tracker_type]()
+
+
+	def set_tracker(self, name, frame, roi):
+		frame = frame if type(frame) == np.ndarray else frame.img
+		self.trackers[name].init(frame, roi)
+
+	def get_tracker(self, name, image):
+		frame = image if type(image) == np.ndarray else image.img
+		success, box = self.trackers[name].update(frame)
+		box = tuple([int(v) for v in box])
+		return success, (box[:2], box[2:])
 
 	def add_trackbar(self, window, name, minimum, maximum, action=lambda a: None):
 		cv2.namedWindow(window)
