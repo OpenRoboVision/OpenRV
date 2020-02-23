@@ -52,6 +52,8 @@ class Contour:
 
 	def center(self):
 		M = cv2.moments(self.contour)
+		if M['m00'] == 0:
+			return None
 		return np.array([int(M['m10'] / M['m00']), int(M['m01'] / M['m00'])])
 
 	def area(self):
@@ -138,6 +140,22 @@ class Contour:
 	def __str__(self):
 		return self.__repr__()
 
+	def __iter__(self):
+		for elem in self.contour:
+			yield elem
+
+	def __len__(self):
+		return len(self.contour)
+
+	def __getitem__(self, ii):
+		return self.contour[ii]
+
+	def __delitem__(self, ii):
+		del self.contour[ii]
+
+	def __setitem__(self, ii, val):
+		self.contour[ii] = val
+
 
 class ContourSet:
 
@@ -183,6 +201,9 @@ class ContourSet:
 		for i in range(len(self.array)):
 			self.array[i].contour += [x, y]
 		return self
+
+	def copy(self):
+		return ContourSet(self.array.copy())
 
 	def __iter__(self):
 		for elem in self.array:

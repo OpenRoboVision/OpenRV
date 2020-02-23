@@ -13,14 +13,13 @@ from openrv.defines import BGR, GRAY, HSV
 
 aruco_params = aruco.DetectorParameters_create()
 
-
 class Image:
 
 	def __init__(self):
 		self.image = np.array([])
 		self.color_scheme = BGR
 
-	def show(self, name='Frame', id=None):
+	def show(self, name='Frame', freeze=False, id=None):
 		""" 
 		Show self.image
 
@@ -36,6 +35,8 @@ class Image:
 		if id is not None:
 			name += ' ' + str(id)
 		cv2.imshow(name, self.image)
+		if freeze:
+			cv2.waitKey()
 		return self
 
 	def resize(self, width=None, height=None, inter=cv2.INTER_CUBIC):
@@ -298,6 +299,9 @@ class Image:
 
 	def _split(self):
 		return cv2.split(self.image)
+
+	def split_chanels(self):
+		return self._split()
 
 	def split(self):
 		return list(map(lambda ch: Image.from_arr(ch, scheme=GRAY), self._split()))
@@ -831,7 +835,7 @@ class Image:
 		return self
 
 	def select_roi(self, win_name, fromCenter=False, showCrosshair=True):
-		return cv2.selectROI("Frame", self.image, fromCenter=fromCenter, showCrosshair=showCrosshair)
+		return cv2.selectROI(win_name, self.image, fromCenter=fromCenter, showCrosshair=showCrosshair)
 
 	def match_template(self, template, method=cv2.TM_CCOEFF, fixed_size=False):
 		gray = self.gray().image
@@ -912,10 +916,21 @@ class Image:
 
 
 	def hist(self):
-		if self.color_scheme ==GRAY:
+		if self.color_scheme == GRAY:
 			return cv2.calcHist([self.img],[0],None,[256],[0,256])
 		else:
 			return np.array([cv2.calcHist([channel],[0],None,[256],[0,256]) for channel in self._split()])
+
+	def equalize_hist(self):
+		if self.color_scheme == GRAY:
+			self.image = cv2.equalizeHist(self.image)
+		else:
+			img_yuv = cv2.cvtColor(self.image if self.color_scheme == BGR else cv2.cvtColor(self.image, cv2.COLOR_HSV2BGR), cv2.COLOR_BGR2YUV )
+			img_yuv[:,:,0] = cv2.equalizeHist(img_yuv[:,:,0])
+			self.image = cv2.cvtColor(img_yuv, cv2.COLOR_YUV2BGR)
+			if self.color_scheme == HSV:
+				self.image = cv2.cvtColor(self.image, cv2.COLOR_BGR2HSV)
+		return self
 
 	def find_barcode(self, draw=False):
 		from pyzbar import pyzbar
@@ -934,11 +949,40 @@ class Image:
 		return data
 
 
-	# def find_blobs(self):		Segmentation fault: 11???
-	# 	keypoints = detector.detect(self.image)
-	# 	self.image = cv2.drawKeypoints(self.image, keypoints, np.array([]), (0,0,255), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
-	# 	return self
+	def diff(self, other):
+		self.image = np.uint8(cv2.absdiff(self.img, other.img))
+		return self
 
+	def k_mean(self, k):
+		image = self.image
+		pixel_values = image.reshape((-1, 3))
+		pixel_values = np.float32(pixel_values)
+		criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 0.2)
+		_, labels, (centers) = cv2.kmeans(pixel_values, k, None, criteria, 10, cv2.KMEANS_RANDOM_CENTERS)
+		centers = np.uint8(centers)
+		labels = labels.flatten().flatten()
+
+		segmented_image = centers[labels]
+		segmented_image = segmented_image.reshape(image.shape)
+
+		mask = labels
+		mask = mask.reshape(image.shape[:2])
+
+		self.image = segmented_image
+		return self
+
+	def hog(self, orientations=8, pixels_per_cell=(16, 16), cells_per_block=(1, 1), normalization=(0, 10), visualize=True):
+		from skimage.feature import hog
+		from skimage import exposure
+
+		pack = hog(self.image, orientations=orientations, pixels_per_cell=pixels_per_cell, cells_per_block=cells_per_block, visualize=visualize, multichannel=(self.color_scheme != GRAY))
+		if visualize:
+			array, image = pack
+			self.image = np.uint8(255*exposure.rescale_intensity(image, in_range=normalization))
+			self.color_scheme = GRAY
+		else:
+			array = pack
+		return array, self
 
 	@property
 	def channels(self):
@@ -1090,7 +1134,9 @@ class Image:
 
 	def __getitem__(self, val):
 		res = self.copy()
-		if len(val) == 2:
+		if type(val) == slice:
+			res.image = res.image[val]
+		elif len(val) == 2:
 			res.image = res.image[val[0], val[1]]
 		elif len(val) == 1:
 			res.image = res.image[val]
